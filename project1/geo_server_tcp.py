@@ -3,7 +3,7 @@ GEO TCP Server
 '''
 #!/usr/bin/env python3
 
-from socket import socket, AF_INET, SOCK_STREAM
+import socket
 import datetime
 
 FILE_NAME = 'geo_world.txt'
@@ -33,9 +33,16 @@ def server(world: dict) -> None:
     '''Main server loop'''
     # TODO: Implement server-side tasks
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-        s.connect((HOST, PORT))
+        s.bind((HOST, PORT))
         s.listen(1)
+        print("Listening on localhost:4300")
         conn, addr = s.accept()
+        with conn:
+            print("Connected: " + str(addr))
+            while True:
+                data = conn.recv(1024) 
+                print(data)
+                 #conn.sendall("Hello, {}".format(data.decode().split()[2]).encode())
 
 
 def main():
