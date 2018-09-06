@@ -16,7 +16,10 @@ def client():
 
 def main():
     '''Main function'''
-    client()
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.bind((HOST, PORT)) 
+        s.listen(1)        
+        client()
 
 
 if __name__ == "__main__":
