@@ -16,7 +16,7 @@ def read_file(filename: str) -> dict:
     world = dict()    
     
     with open(FILE_NAME) as worldData:
-        print("Reading in a file...")
+        print("Reading a file...")
         starttime = datetime.datetime.now()
         for line in worldData:
             dataLst = line.split(" - ")
@@ -38,12 +38,22 @@ def server(world: dict) -> None:
         print("Listening on localhost:4300")
         conn, addr = s.accept()
         with conn:
-            print("Connected: " + str(addr))
+            print("Connected: " + addr[0])
+            conn.sendall("You are connected to the GEO101 server\n".encode())
+            conn.sendall("Enter a country or BYE to quit".encode())
             while True:
-                data = conn.recv(1024) 
-                print(data)
-                 #conn.sendall("Hello, {}".format(data.decode().split()[2]).encode())
-
+                data = conn.recv(1024)
+                if not data:
+                    print("Disconnected: ", addr[0])
+                    break
+                
+                country = data.decode()
+                print("User query: ", country)
+                if country in world.keys():
+                    capital = world[country]
+                    conn.sendall(("+" + capital + "\nEnter another country or BYE to quit").encode())
+                else:
+                    conn.sendall("-There is no such country\nEnter another country or BYE to quit".encode())
 
 def main():
     '''Main function'''
