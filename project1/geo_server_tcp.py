@@ -39,17 +39,15 @@ def server(world: dict) -> None:
         conn, addr = s.accept()
         with conn:
             print("Connected: " + addr[0])
-            conn.sendall("You are connected to the GEO101 server\n".encode())
-            conn.sendall("Enter a country or BYE to quit".encode())
+            conn.sendall("You are connected to the GEO101 server\nEnter a country or BYE to quit".encode())
             while True:
                 data = conn.recv(1024)
                 if not data:
                     print("Disconnected: ", addr[0])
                     break
-                
                 country = data.decode()
                 print("User query: ", country)
-                if country in world.keys():
+                if country in world:
                     capital = world[country]
                     conn.sendall(("+" + capital + "\nEnter another country or BYE to quit").encode())
                 else:
