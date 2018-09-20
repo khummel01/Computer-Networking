@@ -33,7 +33,7 @@ PUBLIC_DNS_SERVER = [
 
 def val_to_2_bytes(value: int) -> list:
     '''Split a value into 2 bytes'''
-    raise NotImplementedError
+    return bytearray(value)
 
 def val_to_n_bytes(value: int, n_bytes: int) -> list:
     '''Split a value into n bytes'''
@@ -53,8 +53,14 @@ def get_offset(bytes_lst: list) -> int:
 
 def parse_cli_query(filename, q_type, q_domain, q_server=None) -> tuple:
     '''Parse command-line query'''
-    raise NotImplementedError
+    if q_type == 'MX':
+        raise ValueError('Unknown query type')
+    # TODO: verify is below is correct
+    if q_server == None:
+        q_server = PUBLIC_DNS_SERVER[2]
+    return (DNS_TYPES[q_type], q_domain.split("."), q_server)
 
+##################################################################################################
 def format_query(q_type: int, q_domain: list) -> bytearray:
     '''Format DNS query'''
     raise NotImplementedError
@@ -88,13 +94,13 @@ def resolve(query: str) -> None:
     '''Resolve the query'''
     q_type, q_domain, q_server = parse_cli_query(*query[0])
     query_bytes = format_query(q_type, q_domain)
-    response_bytes = send_request(query_bytes, q_server)
-    answers = parse_response(response_bytes)
-    print('DNS server used: {}'.format(q_server))
-    for a in answers:
-        print('Domain: {}'.format(a[0]))
-        print('TTL: {}'.format(a[1]))
-        print('Address: {}'.format(a[2]))
+    #response_bytes = send_request(query_bytes, q_server)
+    #answers = parse_response(response_bytes)
+    #print('DNS server used: {}'.format(q_server))
+    #for a in answers:
+        #print('Domain: {}'.format(a[0]))
+        #print('TTL: {}'.format(a[1]))
+        #print('Address: {}'.format(a[2]))
 
 def main(*query):
     '''Main function'''
