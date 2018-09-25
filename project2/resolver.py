@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 
 import sys
-from random import randint, choice, seed
+# from random import randint, choice, seed
+import random
 from socket import socket, SOCK_DGRAM, AF_INET
+import uuid
 
 
 PORT = 53
@@ -33,7 +35,13 @@ PUBLIC_DNS_SERVER = [
 
 def val_to_2_bytes(value: int) -> list:
     '''Split a value into 2 bytes'''
-    return bytearray(value)
+    val_left = value >> 8
+    val_right = value & 0xFF
+    byteLst = []
+    byteLst.append(val_left)
+    byteLst.append(val_right)
+    # print(byteLst)
+    return byteLst
 
 def val_to_n_bytes(value: int, n_bytes: int) -> list:
     '''Split a value into n bytes'''
@@ -62,8 +70,38 @@ def parse_cli_query(filename, q_type, q_domain, q_server=None) -> tuple:
 
 ##################################################################################################
 def format_query(q_type: int, q_domain: list) -> bytearray:
-    '''Format DNS query'''
-    raise NotImplementedError
+    # todo: where does the q_type go in the bytearray
+    transaction_id = random.randint(1, 60000)
+    transaction_id_arr = val_to_2_bytes(transaction_id)
+    byteArr = bytearray()
+    byteArr.append(transaction_id_arr[0])
+    byteArr.append(transaction_id_arr[1])
+    byteArr.append(1)
+    byteArr.append(0)
+    byteArr.append(0)
+    byteArr.append(1)
+    byteArr.append(0)
+    byteArr.append(0)
+    byteArr.append(0)
+    byteArr.append(0)
+    byteArr.append(0)
+    byteArr.append(0)
+    byteArr.append(len(q_domain[0]))
+    byteArr = byteArr + bytearray(q_domain[0], "utf-8")
+    byteArr.append(len(q_domain[1]))
+    byteArr = byteArr + bytearray(q_domain[1], "utf-8")
+    byteArr.append(0)
+
+    q_domain_2_bytes = val_to_2_bytes(q_type) # todo: in the right spot?
+    byteArr.append(q_domain_2_bytes[0])
+    byteArr.append(q_domain_2_bytes[1])
+
+    byteArr.append(0)
+    byteArr.append(1)
+
+    print(byteArr)
+    return byteArr
+
 
 def send_request(q_message: bytearray, q_server: str) -> bytes:
     '''Contact the server'''
@@ -71,12 +109,13 @@ def send_request(q_message: bytearray, q_server: str) -> bytes:
     client_sckt.sendto(q_message, (q_server, PORT))
     (q_response, _) = client_sckt.recvfrom(2048)
     client_sckt.close()
-    
+
+    print(q_response)
     return q_response
 
 def parse_response(resp_bytes: bytes):
     '''Parse server response'''
-    raise NotImplementedError
+    print(resp_bytes)
 
 def parse_answers(resp_bytes: bytes, offset: int, rr_ans: int) -> list:
     '''Parse DNS server answers'''
@@ -92,18 +131,20 @@ def parse_address_aaaa(addr_len: int, addr_bytes: bytes) -> str:
 
 def resolve(query: str) -> None:
     '''Resolve the query'''
-    q_type, q_domain, q_server = parse_cli_query(*query[0])
-    query_bytes = format_query(q_type, q_domain)
-    #response_bytes = send_request(query_bytes, q_server)
-    #answers = parse_response(response_bytes)
+    q_type, q_domain, q_server = parse_cli_query(*query[0]) # done
+    query_bytes = format_query(q_type, q_domain) # in progress
+    response_bytes = send_request(query_bytes, q_server) # done
+    # answers = parse_response(response_bytes)
     #print('DNS server used: {}'.format(q_server))
     #for a in answers:
         #print('Domain: {}'.format(a[0]))
         #print('TTL: {}'.format(a[1]))
         #print('Address: {}'.format(a[2]))
 
-def main(*query):
+def main(): # *query
     '''Main function'''
+    query = [["resolver.py", "A", "luther.edu", "1.1.1.1"]]
+    print(query)
     if len(query[0]) < 3 or len(query[0]) > 4:
         print('Proper use: python3 resolver.py <type> <domain> <server>')
         exit()
@@ -111,4 +152,5 @@ def main(*query):
 
 
 if __name__ == '__main__':
-    main(sys.argv)
+    # main(sys.argv)
+    main()
