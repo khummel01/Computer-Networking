@@ -59,15 +59,13 @@ def bytes_to_val(bytes_lst: list) -> int:
     for i in range(len(bytes_lst)-1,-1,-1):
         reshifted.append(bytes_lst[i] << shift)
         shift += 8
-        # print(str(bytes_lst[i]), bytes_lst[i] << shift)
 
     for i in range(len(reshifted)):
         value += reshifted[i]
 
-    # print(value)
     return value
 
-def get_2_bits(bytes_lst: list) -> int:
+def get_2_bits(bytes_lst: list) -> int: #co01 look for domain #could be something else
     '''Extract first two bits of a two-byte sequence'''
     return bytes_lst[0] >> 6
 
@@ -126,67 +124,47 @@ def send_request(q_message: bytearray, q_server: str) -> bytes:
 
     return q_response
 #################################################HERE!!!#########################################
-# todo: how to handle multiple IP addresses?
 def parse_response(resp_bytes: bytes):
     # '''Parse server response'''
-    for byte in resp_bytes:
-        print(byte, chr(bytes_to_val([byte])))
+    for i in range(len(resp_bytes)):
+        print("index: ", i, "value: ", bytes_to_val([resp_bytes[i]]))
     print("########")
 
-    overall_index = 12
-    domain_ttl_addr = []
+    rr_ans = resp_bytes[7]
+    offset_index = 12
 
-    answer_bytes_to_parse_ans = []
-    while overall_index < len(resp_bytes):
-    # for i in range(1): #FOR DEBUGGING PURPOSES ONLY!
-        # get domain name
-        place = overall_index
-        domain_names = []
-        if place == 12:
-            # Find domain names
-            while resp_bytes[place] != 0:
-                # print("place: ", place)
-                for j in range(1, resp_bytes[place]+1):
-                    domain_chr = chr(bytes_to_val([resp_bytes[place+j]]))
-                    # print(resp_bytes[place+j], domain_chr)
-                    domain_names.append(domain_chr)
-                place += resp_bytes[place] + 1
-                if resp_bytes[place+1] != 0:
-                    domain_names.append(".")
-            domain_ttl_addr.append("".join(domain_names))
-            overall_index = place + 6 #to get to the answers??
+    # find index of the start of the answers
+    while resp_bytes[offset_index] != 0:
+        offset_index += 1
 
-            # print("overall: ", overall_index)
-            # print("whereiam: ", resp_bytes[overall_index])
+    # add 5 to skip over Type and Class, now we found where the answers start
+    offset_index += 5
 
-        answer_bytes_to_parse_ans.append(resp_bytes[overall_index])
-        overall_index += 1
+    # let's go go parse the answers!
+    answers = parse_answers(resp_bytes, offset_index, rr_ans)
 
-    # todo: what are we sending to parse_answer? offset where the answer starts? index of c0?
-    print(answer_bytes_to_parse_ans)
-    # final_answers = parse_answers(answer_bytes_to_parse_ans, )
-
-
-
-
-            # # Parse Answers
-            # answer_byte_array = []
-            # for i in range(overall_index, len(resp_bytes)) # todo: fix end loop
-            #     answer_byte_array.append(resp_bytes[overall_index])
-            #     overall_index += 1
-            # print(chr(bytes_to_val([resp_bytes[overall_index]])))
-
-    # if respbytes'[placej == 0 or resp_bytes == 1:
-    # overindex += 1
-    #
-    # if respbyesplace == 192:'
-    #     ansrlist = []
-    #     place +=1
-
-# todo: what is being passed in?, 28->300 in test case
 def parse_answers(resp_bytes: bytes, offset: int, rr_ans: int) -> list:
     '''Parse DNS server answers'''
-    raise NotImplementedError
+    # check to see if domain name is in answers, if not, go back to query and grab it
+    # todo: make sure to "".join at the end
+    domain_name = []
+
+    # 12 is the index were the query will always start
+    index = 12
+    # Get domain name
+    while resp_bytes[index] != 0:
+        for i in range(1, resp_bytes[index] + 1):
+            domain_chr = chr(bytes_to_val([resp_bytes[index + i]]))
+            domain_name.append(domain_chr)
+        index += resp_bytes[index] + 1
+        if resp_bytes[index + 1] != 0:
+            domain_name.append(".")
+
+    print(domain_name)
+    print(get_offset([resp_bytes[offset], resp_bytes[offset+1]]))
+    if get_offset([resp_bytes[offset], resp_bytes[offset+1]]) == 12:
+        print("Right after me is Type, Class, TTL, Data Length, Address")
+
 
 def parse_address_a(addr_len: int, addr_bytes: bytes) -> str:
     '''Extract IPv4 address'''
