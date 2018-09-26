@@ -42,19 +42,13 @@ def val_to_2_bytes(value: int) -> list:
 def val_to_n_bytes(value: int, n_bytes: int) -> list:
     '''Split a value into n bytes'''
     byteLst = []
-    shift = 0
-    # for i in range(n_bytes):
-    #     byteLst.insert(0, (value >> shift))
-    #     shift += 8
+    shiftedVal = value
+    for i in range(n_bytes):
+        newVal = shiftedVal & 0xFF
+        byteLst.insert(0, newVal)
+        shiftedVal = shiftedVal >> 8
 
-    byteLst.insert(0, (value & 0x000000FF)>>0)
-    byteLst.insert(0, (value & 0x0000FF00)>>8)
-    byteLst.insert(0, (value & 0x00FF0000)>>16)
-
-    # byteLst.insert(0, (value & 0xFF000000)>>24)
-    # byteLst.insert(0, (value & 0x000000FF)>>32) # todo: what next?
-
-    print(byteLst)
+    # print(byteLst)
     return byteLst
 
 def bytes_to_val(bytes_lst: list) -> int:
@@ -65,16 +59,17 @@ def bytes_to_val(bytes_lst: list) -> int:
     for i in range(len(bytes_lst)-1,-1,-1):
         reshifted.append(bytes_lst[i] << shift)
         shift += 8
-        print(str(bytes_lst[i]), bytes_lst[i] << shift)
+        # print(str(bytes_lst[i]), bytes_lst[i] << shift)
 
     for i in range(len(reshifted)):
         value += reshifted[i]
 
+    # print(value)
     return value
 
 def get_2_bits(bytes_lst: list) -> int:
     '''Extract first two bits of a two-byte sequence'''
-    raise NotImplementedError
+    return bytes_lst[0] >> 6
 
 def get_offset(bytes_lst: list) -> int:
     '''Extract size of the offset from a two-byte sequence'''
@@ -129,14 +124,66 @@ def send_request(q_message: bytearray, q_server: str) -> bytes:
     (q_response, _) = client_sckt.recvfrom(2048)
     client_sckt.close()
 
-    # print(q_response)
     return q_response
-
-##################################################################################################
+#################################################HERE!!!#########################################
+# todo: how to handle multiple IP addresses?
 def parse_response(resp_bytes: bytes):
-    '''Parse server response'''
-    print(resp_bytes)
+    # '''Parse server response'''
+    for byte in resp_bytes:
+        print(byte, chr(bytes_to_val([byte])))
+    print("########")
 
+    overall_index = 12
+    domain_ttl_addr = []
+
+    answer_bytes_to_parse_ans = []
+    while overall_index < len(resp_bytes):
+    # for i in range(1): #FOR DEBUGGING PURPOSES ONLY!
+        # get domain name
+        place = overall_index
+        domain_names = []
+        if place == 12:
+            # Find domain names
+            while resp_bytes[place] != 0:
+                # print("place: ", place)
+                for j in range(1, resp_bytes[place]+1):
+                    domain_chr = chr(bytes_to_val([resp_bytes[place+j]]))
+                    # print(resp_bytes[place+j], domain_chr)
+                    domain_names.append(domain_chr)
+                place += resp_bytes[place] + 1
+                if resp_bytes[place+1] != 0:
+                    domain_names.append(".")
+            domain_ttl_addr.append("".join(domain_names))
+            overall_index = place + 6 #to get to the answers??
+
+            # print("overall: ", overall_index)
+            # print("whereiam: ", resp_bytes[overall_index])
+
+        answer_bytes_to_parse_ans.append(resp_bytes[overall_index])
+        overall_index += 1
+
+    # todo: what are we sending to parse_answer? offset where the answer starts? index of c0?
+    print(answer_bytes_to_parse_ans)
+    # final_answers = parse_answers(answer_bytes_to_parse_ans, )
+
+
+
+
+            # # Parse Answers
+            # answer_byte_array = []
+            # for i in range(overall_index, len(resp_bytes)) # todo: fix end loop
+            #     answer_byte_array.append(resp_bytes[overall_index])
+            #     overall_index += 1
+            # print(chr(bytes_to_val([resp_bytes[overall_index]])))
+
+    # if respbytes'[placej == 0 or resp_bytes == 1:
+    # overindex += 1
+    #
+    # if respbyesplace == 192:'
+    #     ansrlist = []
+    #     place +=1
+
+# todo: what is being passed in?, 28->300 in test case
 def parse_answers(resp_bytes: bytes, offset: int, rr_ans: int) -> list:
     '''Parse DNS server answers'''
     raise NotImplementedError
@@ -154,9 +201,9 @@ def resolve(query: str) -> None:
     q_type, q_domain, q_server = parse_cli_query(*query[0]) # done
     query_bytes = format_query(q_type, q_domain) # in progress
     response_bytes = send_request(query_bytes, q_server) # done
-    val_to_n_bytes(430430, 3)
+    # val_to_n_bytes(430430, 3)
     # bytes_to_val([6, 145, 94])
-    # answers = parse_response(response_bytes)
+    answers = parse_response(response_bytes)
     #print('DNS server used: {}'.format(q_server))
     #for a in answers:
         #print('Domain: {}'.format(a[0]))
