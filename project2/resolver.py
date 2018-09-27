@@ -32,13 +32,14 @@ PUBLIC_DNS_SERVER = [
     '208.67.220.220'  # OpenDNS
 ]
 
-
+# todo: not sure when to use
 def val_to_2_bytes(value: int) -> list:
     '''Split a value into 2 bytes'''
     val_left = value >> 8
     val_right = value & 0xFF
     return [val_left, val_right]
 
+# todo: not sure when to use
 def val_to_n_bytes(value: int, n_bytes: int) -> list:
     '''Split a value into n bytes'''
     byteLst = []
@@ -65,6 +66,7 @@ def bytes_to_val(bytes_lst: list) -> int:
 
     return value
 
+# todo: figure out when to use
 def get_2_bits(bytes_lst: list) -> int: #co01 look for domain #could be something else
     '''Extract first two bits of a two-byte sequence'''
     return bytes_lst[0] >> 6
@@ -112,7 +114,6 @@ def format_query(q_type: int, q_domain: list) -> bytearray:
     byteArr.append(0)
     byteArr.append(1)
 
-    # print(byteArr)
     return byteArr
 
 def send_request(q_message: bytearray, q_server: str) -> bytes:
@@ -126,9 +127,9 @@ def send_request(q_message: bytearray, q_server: str) -> bytes:
 #################################################HERE!!!#########################################
 def parse_response(resp_bytes: bytes):
     # '''Parse server response'''
-    for i in range(len(resp_bytes)):
-        print("index: ", i, "value: ", bytes_to_val([resp_bytes[i]]))
-    print("########")
+    # for i in range(len(resp_bytes)):
+    #     print("index: ", i, "value: ", bytes_to_val([resp_bytes[i]]))
+    # print("########")
 
     rr_ans = resp_bytes[7]
     offset_index = 12
@@ -146,10 +147,9 @@ def parse_response(resp_bytes: bytes):
 def parse_answers(resp_bytes: bytes, offset: int, rr_ans: int) -> list:
     '''Parse DNS server answers'''
     # check to see if domain name is in answers, if not, go back to query and grab it
-    # todo: make sure to "".join at the end
     domain_name = []
 
-    # 12 is the index were the query will always start
+    # 12 is the index where the query will always start
     index = 12
     # Get domain name
     while resp_bytes[index] != 0:
@@ -160,11 +160,32 @@ def parse_answers(resp_bytes: bytes, offset: int, rr_ans: int) -> list:
         if resp_bytes[index + 1] != 0:
             domain_name.append(".")
 
-    print(domain_name)
-    print(get_offset([resp_bytes[offset], resp_bytes[offset+1]]))
+    domain_name = "".join(domain_name)
+
+    domain_ttl_addr = []  # list of tuples (domain, ttl, address)
+
+    # domain name not included in each of the answers
     if get_offset([resp_bytes[offset], resp_bytes[offset+1]]) == 12:
         print("Right after me is Type, Class, TTL, Data Length, Address")
+        overall_answer_index = offset
 
+        addr_len = bytes_to_val([resp_bytes[overall_answer_index+10], resp_bytes[overall_answer_index+11]])
+        for i in range(rr_ans):
+            ttl = bytes_to_val([resp_bytes[overall_answer_index+6], resp_bytes[overall_answer_index+7], \
+                                     resp_bytes[overall_answer_index+8], resp_bytes[overall_answer_index+9]])
+            if addr_len == 4:
+                addr = parse_address_a() # todo: FINISH!
+            elif addr_len == 6:
+                addr = parse_address_aaaa() # todo: FINISH!
+            overall_answer_index += 12+addr_len
+
+    # domain name included
+    # else: domain named included
+        # overall_answer_index = offset
+
+        # counter_domain = 0 # counter to keep track of how many bytes we have to skip each time
+        # while bytes_to_val(resp_bytes[overall_answer_index]) != 0
+            # counter += 1
 
 def parse_address_a(addr_len: int, addr_bytes: bytes) -> str:
     '''Extract IPv4 address'''
@@ -176,11 +197,9 @@ def parse_address_aaaa(addr_len: int, addr_bytes: bytes) -> str:
 
 def resolve(query: str) -> None:
     '''Resolve the query'''
-    q_type, q_domain, q_server = parse_cli_query(*query[0]) # done
-    query_bytes = format_query(q_type, q_domain) # in progress
-    response_bytes = send_request(query_bytes, q_server) # done
-    # val_to_n_bytes(430430, 3)
-    # bytes_to_val([6, 145, 94])
+    q_type, q_domain, q_server = parse_cli_query(*query[0])
+    query_bytes = format_query(q_type, q_domain)
+    response_bytes = send_request(query_bytes, q_server)
     answers = parse_response(response_bytes)
     #print('DNS server used: {}'.format(q_server))
     #for a in answers:
