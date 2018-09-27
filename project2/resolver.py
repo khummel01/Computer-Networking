@@ -39,7 +39,7 @@ def val_to_2_bytes(value: int) -> list:
     val_right = value & 0xFF
     return [val_left, val_right]
 
-# todo: not sure when to use
+# do not need to use
 def val_to_n_bytes(value: int, n_bytes: int) -> list:
     '''Split a value into n bytes'''
     byteLst = []
@@ -48,8 +48,6 @@ def val_to_n_bytes(value: int, n_bytes: int) -> list:
         newVal = shiftedVal & 0xFF
         byteLst.insert(0, newVal)
         shiftedVal = shiftedVal >> 8
-
-    # print(byteLst)
     return byteLst
 
 def bytes_to_val(bytes_lst: list) -> int:
@@ -124,7 +122,7 @@ def send_request(q_message: bytearray, q_server: str) -> bytes:
     client_sckt.close()
 
     return q_response
-#################################################HERE!!!#########################################
+
 def parse_response(resp_bytes: bytes):
     # '''Parse server response'''
     # for i in range(len(resp_bytes)):
@@ -160,24 +158,36 @@ def parse_answers(resp_bytes: bytes, offset: int, rr_ans: int) -> list:
         if resp_bytes[index + 1] != 0:
             domain_name.append(".")
 
-    domain_name = "".join(domain_name)
-
     domain_ttl_addr = []  # list of tuples (domain, ttl, address)
 
-    # domain name not included in each of the answers
-    if get_offset([resp_bytes[offset], resp_bytes[offset+1]]) == 12:
-        print("Right after me is Type, Class, TTL, Data Length, Address")
-        overall_answer_index = offset
+    overall_answer_index = offset
 
-        addr_len = bytes_to_val([resp_bytes[overall_answer_index+10], resp_bytes[overall_answer_index+11]])
-        for i in range(rr_ans):
-            ttl = bytes_to_val([resp_bytes[overall_answer_index+6], resp_bytes[overall_answer_index+7], \
-                                     resp_bytes[overall_answer_index+8], resp_bytes[overall_answer_index+9]])
-            if addr_len == 4:
-                addr = parse_address_a() # todo: FINISH!
-            elif addr_len == 6:
-                addr = parse_address_aaaa() # todo: FINISH!
-            overall_answer_index += 12+addr_len
+    # domain name included in the answer, have to adjust the overall_answer_index where parsing begins
+    if get_offset([resp_bytes[offset], resp_bytes[offset+1]]) != 12: # todo: this condition may not be right
+        overall_answer_index = overall_answer_index + len(domain_name)
+
+    addr_len = bytes_to_val([resp_bytes[overall_answer_index+10], resp_bytes[overall_answer_index+11]])
+    for i in range(rr_ans):
+        # grab ttl
+        ttl = bytes_to_val([resp_bytes[overall_answer_index+6], resp_bytes[overall_answer_index+7], \
+                                 resp_bytes[overall_answer_index+8], resp_bytes[overall_answer_index+9]])
+
+        # grab IP bytes, send to either parse_address_a or aaaa to get parsed
+        addr_bytes = []
+        for i in range(addr_len):
+            addr_bytes.append(resp_bytes[overall_answer_index+12+i])
+            # bytes_to_val([resp_bytes[overall_answer_index+12]])
+
+        if addr_len == 4:
+            addr = parse_address_a(addr_len, addr_bytes)
+        elif addr_len == 16:
+            addr = parse_address_aaaa(addr_len, addr_bytes)
+
+        overall_answer_index += addr_len+12
+
+        # domain_ttl_addr.append(("".join(domain_name), ttl, addr)
+        # print(addr)
+
 
     # domain name included
     # else: domain named included
@@ -189,11 +199,26 @@ def parse_answers(resp_bytes: bytes, offset: int, rr_ans: int) -> list:
 
 def parse_address_a(addr_len: int, addr_bytes: bytes) -> str:
     '''Extract IPv4 address'''
-    raise NotImplementedError
+    ip_addr = []
+    for i in range(addr_len):
+        ip_addr.append(str(bytes_to_val([addr_bytes[i]])))
+        if i != addr_len-1:
+            ip_addr.append(".")
+    print("".join(ip_addr))
+    return "".join(ip_addr)
 
 def parse_address_aaaa(addr_len: int, addr_bytes: bytes) -> str:
     '''Extract IPv6 address'''
-    raise NotImplementedError
+    ip_addr = []
+    for i in range(0, addr_len, 2):
+        print(bytes_to_val([addr_bytes[i]]), bytes_to_val([addr_bytes[i+1]]))
+        # print(bytes_to_val([addr_bytes[i+1]]))
+        # ip_addr.append(bytes_to_val([addr_bytes[i], addr_bytes[i+1]]))
+    # print(ip_addr)
+    print("#####")
+    # for i in range(addr_len):
+
+    # return "".join(ip_addr)
 
 def resolve(query: str) -> None:
     '''Resolve the query'''
