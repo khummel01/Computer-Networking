@@ -130,7 +130,7 @@ def parse_response(resp_bytes: bytes):
     while resp_bytes[offset_index] != 0:
         offset_index += 1
 
-    # add 5 to skip over Type and Class, now we found where the answers start
+    # add 5 to skip over Type and Class, now we have found where the answers start
     offset_index += 5
 
     # let's go parse the answers!
@@ -141,7 +141,6 @@ def parse_response(resp_bytes: bytes):
 def parse_answers(resp_bytes: bytes, offset: int, rr_ans: int) -> list:
     '''Parse DNS server answers'''
     domain_name = []
-
     # 12 is the index where the query will always start
     index = 12
     # Get domain name
@@ -158,46 +157,32 @@ def parse_answers(resp_bytes: bytes, offset: int, rr_ans: int) -> list:
 
     overall_answer_index = offset
 
-    labels = False
-    # we have a label
-    if get_2_bits([resp_bytes[offset], resp_bytes[offset+1]]) == 3:
-        domain_index = get_offset([resp_bytes[offset], resp_bytes[offset + 1]])
-        # function to get domain name?
-        #labels = True
-        #  overall_answer_index = overall_answer_index + len(domain_name)
+    # todo: use get_to_bites instead
+    if get_offset([resp_bytes[offset], resp_bytes[offset+1]]) != 12:
+        overall_answer_index = overall_answer_index + len(domain_name)
 
-    else:
-        #  overall_answer_index = overall_answer_index + len(domain_name)
-    print("get_2_bits test: ", get_2_bits([resp_bytes[offset], resp_bytes[offset+1]]))
+    addr_len = bytes_to_val([resp_bytes[overall_answer_index+10], resp_bytes[overall_answer_index+11]])
+    for i in range(rr_ans):
+        # grab ttl
+        ttl = bytes_to_val([resp_bytes[overall_answer_index+6], resp_bytes[overall_answer_index+7], \
+                                 resp_bytes[overall_answer_index+8], resp_bytes[overall_answer_index+9]])
 
-    # if labels == True:
-    #
-    # else:
-    # if get_offset([resp_bytes[offset], resp_bytes[offset+1]]) != 12: # todo: this condition may not be right, if 2 bytes == 3 call get_offset
-    #     overall_answer_index = overall_answer_index + len(domain_name)
-    #
-    # addr_len = bytes_to_val([resp_bytes[overall_answer_index+10], resp_bytes[overall_answer_index+11]])
-    # for i in range(rr_ans):
-    #     # grab ttl
-    #     ttl = bytes_to_val([resp_bytes[overall_answer_index+6], resp_bytes[overall_answer_index+7], \
-    #                              resp_bytes[overall_answer_index+8], resp_bytes[overall_answer_index+9]])
-    #
-    #     # grab IP bytes, send to either parse_address_a or aaaa to get parsed
-    #     addr_bytes = resp_bytes[overall_answer_index+12:overall_answer_index+12+addr_len+1]
-    #     if addr_len == 4:
-    #         addr = parse_address_a(addr_len, addr_bytes)
-    #     elif addr_len == 16:
-    #         addr = parse_address_aaaa(addr_len, addr_bytes)
-    #
-    #     # set up index for the next answer to process
-    #     if get_offset([resp_bytes[offset], resp_bytes[offset + 1]]) != 12:  # todo: this condition may not be right
-    #         overall_answer_index += addr_len+12+len(domain_name)
-    #     else:
-    #         overall_answer_index += addr_len+12 # 12 is the number of bytes between the start of the answer and the address byte
-    #
-    #     domain_ttl_addr.append(("".join(domain_name), ttl, addr))
-    #
-    # return domain_ttl_addr
+        # grab IP bytes, send to either parse_address_a or aaaa to get parsed
+        addr_bytes = resp_bytes[overall_answer_index+12:overall_answer_index+12+addr_len+1]
+        if addr_len == 4:
+            addr = parse_address_a(addr_len, addr_bytes)
+        elif addr_len == 16:
+            addr = parse_address_aaaa(addr_len, addr_bytes)
+
+        # set up index for the next answer to process
+        if get_offset([resp_bytes[offset], resp_bytes[offset + 1]]) != 12:  # todo: fix
+            overall_answer_index += addr_len+12+len(domain_name)
+        else:
+            overall_answer_index += addr_len+12 # 12 is the number of bytes between the start of the answer and the address byte
+
+        domain_ttl_addr.append(("".join(domain_name), ttl, addr))
+
+    return domain_ttl_addr
 
 def parse_address_a(addr_len: int, addr_bytes: bytes) -> str:
     '''Extract IPv4 address'''
@@ -208,33 +193,30 @@ def parse_address_a(addr_len: int, addr_bytes: bytes) -> str:
             ip_addr.append(".")
     return "".join(ip_addr)
 
-# TODO: FINISH!!!
 def parse_address_aaaa(addr_len: int, addr_bytes: bytes) -> str:
     '''Extract IPv6 address'''
-    ip_addr = ""
-    for i in range(addr_len):
-        if i != 4 and i != 9 and i != 11 and i != 13 and i != 14:
-            hex_val = hex(addr_bytes[i])
-            hex_slice = hex_val[2:]
+    ip_addr = []
+    for i in range(0, addr_len-1, 2):
+        ip_val = ""
+        hex_val1 =  hex(addr_bytes[i])
+        hex_slice1 = hex_val1[2:]
+        hex_val2 = hex(addr_bytes[i+1])
+        hex_slice2 = hex_val2[2:]
 
-            # accomodate for hex values of 0x1 which is really 01
-            if len(hex_slice) == 1 and hex_slice[0] != "0" and i != 15 and hex_slice[0] not in "abcdefghijklmnoprstuvwxyz":
-                ip_addr = ip_addr + "0" + hex_slice
-            elif len(hex_slice) == 1 and hex_slice[0] in "abcdefghijklmnoprstuvwxyz":
-                ip_addr = ip_addr + hex_slice
-            elif i == 8 or i == 10 or i ==12:
-                ip_addr = ip_addr + "0"
-            else:
-                ip_addr = ip_addr + hex_slice
+        if hex_slice1 != "0":
+            ip_val = ip_val + hex_slice1
+        if len(hex_slice2) ==  1 and hex_slice2 != "0" and i != 4 and i != 14:
+            ip_val = ip_val + "0" + hex_slice2
+        else:
+            ip_val = ip_val + hex_slice2
+        ip_addr.append(ip_val)
 
-            # place ":" appropriately
-            if i%2 != 0 and i != 15 or i == 8 or i == 10 or i == 12:
-                ip_addr = ip_addr + ":"
-
-            # print(i, hex_slice)
-    # print(ip_addr)
-    # print("~~~~~~~~~~~~~~~~~~~~~~~~~~~")
-    return ip_addr
+    final_ip_addr = ""
+    for i in range(len(ip_addr)):
+        final_ip_addr = final_ip_addr + ip_addr[i]
+        if i != len(ip_addr)-1:
+            final_ip_addr = final_ip_addr + ":"
+    return final_ip_addr
 
 def resolve(query: str) -> None:
     '''Resolve the query'''
@@ -242,11 +224,11 @@ def resolve(query: str) -> None:
     query_bytes = format_query(q_type, q_domain)
     response_bytes = send_request(query_bytes, q_server)
     answers = parse_response(response_bytes)
-    #print('DNS server used: {}'.format(q_server))
-    #for a in answers:
-        #print('Domain: {}'.format(a[0]))
-        #print('TTL: {}'.format(a[1]))
-        #print('Address: {}'.format(a[2]))
+    print('DNS server used: {}'.format(q_server))
+    for a in answers:
+        print('Domain: {}'.format(a[0]))
+        print('TTL: {}'.format(a[1]))
+        print('Address: {}'.format(a[2]))
 
 def main(*query):
     '''Main function'''
