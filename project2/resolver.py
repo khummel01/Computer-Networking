@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 import sys
-# from random import randint, choice, seed
+from random import randint, choice, seed
 import random
 from socket import socket, SOCK_DGRAM, AF_INET
 import uuid
@@ -77,13 +77,13 @@ def parse_cli_query(filename, q_type, q_domain, q_server=None) -> tuple:
     '''Parse command-line query'''
     if q_type == 'MX':
         raise ValueError('Unknown query type')
-    # TODO: verify is below is correct
     if q_server == None:
-        q_server = PUBLIC_DNS_SERVER[2]
+        q_server = choice(PUBLIC_DNS_SERVER)
+    print(q_server)
     return (DNS_TYPES[q_type], q_domain.split("."), q_server)
 
 def format_query(q_type: int, q_domain: list) -> bytearray:
-    transaction_id = random.randint(1, 60000)
+    transaction_id = random.randint(1, 65000)
     transaction_id_arr = val_to_2_bytes(transaction_id)
     byteArr = bytearray()
     byteArr.append(transaction_id_arr[0])
@@ -129,7 +129,7 @@ def parse_response(resp_bytes: bytes):
     #     print("index: ", i, "value: ", bytes_to_val([resp_bytes[i]]))
     # print("########")
     # print(resp_bytes)
-    rr_ans = resp_bytes[7]
+    rr_ans = resp_bytes[7] # two bytes
     offset_index = 12
 
     # find index of the start of the answers
@@ -140,7 +140,9 @@ def parse_response(resp_bytes: bytes):
     offset_index += 5
 
     # let's go go parse the answers!
-    answers = parse_answers(resp_bytes, offset_index, rr_ans)
+    parsed_answer = parse_answers(resp_bytes, offset_index, rr_ans)
+
+    return parsed_answer
 
 def parse_answers(resp_bytes: bytes, offset: int, rr_ans: int) -> list:
     '''Parse DNS server answers'''
@@ -163,7 +165,7 @@ def parse_answers(resp_bytes: bytes, offset: int, rr_ans: int) -> list:
     overall_answer_index = offset
 
     # domain name included in the answer, have to adjust the overall_answer_index to where parsing begins
-    if get_offset([resp_bytes[offset], resp_bytes[offset+1]]) != 12: # todo: this condition may not be right
+    if get_offset([resp_bytes[offset], resp_bytes[offset+1]]) != 12: # todo: this condition may not be right, if 2 bytes == 3 call get_offset
         overall_answer_index = overall_answer_index + len(domain_name)
 
     addr_len = bytes_to_val([resp_bytes[overall_answer_index+10], resp_bytes[overall_answer_index+11]])
@@ -179,22 +181,15 @@ def parse_answers(resp_bytes: bytes, offset: int, rr_ans: int) -> list:
         elif addr_len == 16:
             addr = parse_address_aaaa(addr_len, addr_bytes)
 
+        # set up index for the next answer to process
         if get_offset([resp_bytes[offset], resp_bytes[offset + 1]]) != 12:  # todo: this condition may not be right
-            overall_answer_index = overall_answer_index + len(domain_name)
+            overall_answer_index += addr_len+12+len(domain_name)
         else:
-            overall_answer_index += addr_len+12
+            overall_answer_index += addr_len+12 # 12 is the number of bytes between the start of the answer and the address byte
 
-        # domain_ttl_addr.append(("".join(domain_name), ttl, addr)
-        # print(addr)
+        domain_ttl_addr.append(("".join(domain_name), ttl, addr))
 
-
-    # domain name included
-    # else: domain named included
-        # overall_answer_index = offset
-
-        # counter_domain = 0 # counter to keep track of how many bytes we have to skip each time
-        # while bytes_to_val(resp_bytes[overall_answer_index]) != 0
-            # counter += 1
+    return domain_ttl_addr
 
 def parse_address_a(addr_len: int, addr_bytes: bytes) -> str:
     '''Extract IPv4 address'''
@@ -205,18 +200,41 @@ def parse_address_a(addr_len: int, addr_bytes: bytes) -> str:
             ip_addr.append(".")
     return "".join(ip_addr)
 
+# TODO: FINISH!!!
 def parse_address_aaaa(addr_len: int, addr_bytes: bytes) -> str:
     '''Extract IPv6 address'''
+    # print(addr_bytes)
+    # for i in range(addr_len):
+    #     print(hex(addr_bytes[i]))
+    # print("***")
+    ip_addr = ""
+    for i in range(addr_len):
+        if i != 4 and i != 9 and i != 11 and i != 13 and i != 14: # we don't want to append 00 for column 3 of the ip address
+            hex_val = hex(addr_bytes[i])
+            hex_slice = hex_val[2:]
+            # ip_val = ""
 
-    print()
-    ip_addr = []
-    for i in range(0, addr_len, 2):
-        # print(hex(addr_bytes[i]))
-        # print(hex(bytes_to_val([addr_bytes[i]])), hex(bytes_to_val([addr_bytes[i+1]])))
-        # print(bytes_to_val([addr_bytes[i+1]]))
-        ip_addr.append(bytes_to_val([addr_bytes[i], addr_bytes[i+1]]))
-    # print(ip_addr)
-    # print("#####")
+            # accomodate for hex values of 0x1 which is really 01
+            # print(hex(addr_bytes[i]), hex_slice)
+            if len(hex_slice) == 1 and hex_slice[0] != "0" and i != 15:
+                # ip_val = "01"
+                ip_addr = ip_addr + "0" + hex_slice
+            elif i == 8 or i == 10 or i ==12:
+                # ip_val = "0"
+                ip_addr = ip_addr + "0"
+            else:
+                ip_addr = ip_addr + hex_slice
+
+            # place ":" appropriately
+            # ":" comes after every odd number and
+            if i%2 != 0 and i != 15 or i == 8 or i == 10 or i == 12:
+                ip_addr = ip_addr + ":"
+
+            print(i, hex_slice)
+    print("~~~~~~~~~~~~~~~~~~~~~~~~~~~")
+
+    print(ip_addr)
+
     # return "".join(ip_addr)
 
 def resolve(query: str) -> None:
