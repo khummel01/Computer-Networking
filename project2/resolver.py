@@ -122,7 +122,7 @@ def send_request(q_message: bytearray, q_server: str) -> bytes:
     return q_response
 
 def parse_response(resp_bytes: bytes):
-    # '''Parse server response'''
+    '''Parse server response'''
     rr_ans = bytes_to_val([resp_bytes[6], resp_bytes[7]]) # two bytes
     offset_index = 12
 
@@ -140,45 +140,52 @@ def parse_response(resp_bytes: bytes):
 
 def parse_answers(resp_bytes: bytes, offset: int, rr_ans: int) -> list:
     '''Parse DNS server answers'''
-    domain_name = []
-    # 12 is the index where the query will always start
-    index = 12
-    # Get domain name
-    while resp_bytes[index] != 0:
-        for i in range(1, resp_bytes[index] + 1):
-            domain_chr = chr(bytes_to_val([resp_bytes[index + i]]))
-            domain_name.append(domain_chr)
-        index += resp_bytes[index] + 1
-        if resp_bytes[index + 1] != 0:
-            domain_name.append(".")
-
-    # list of tuples (domain, ttl, address)
+    # what is going to be returned, a list of tuples (domain, ttl, address)
     domain_ttl_addr = []
 
-    overall_answer_index = offset
+    domain_name = []
 
-    # todo: use get_to_bites instead
-    if get_offset([resp_bytes[offset], resp_bytes[offset+1]]) != 12:
-        overall_answer_index = overall_answer_index + len(domain_name)
+    domain_index = offset
 
-    addr_len = bytes_to_val([resp_bytes[overall_answer_index+10], resp_bytes[overall_answer_index+11]])
+    labelPointer = False
+
+    # we have a label, update domain_index
+    if get_2_bits([resp_bytes[offset], resp_bytes[offset+1]]) == 3:
+        domain_index = get_offset([resp_bytes[offset], resp_bytes[offset + 1]])
+        labelPointer = True
+
+    # time to parse the domain name
+    while resp_bytes[domain_index] != 0:
+        for i in range(1, resp_bytes[domain_index] + 1):
+            domain_chr = chr(bytes_to_val([resp_bytes[domain_index + i]]))
+            domain_name.append(domain_chr)
+        domain_index += resp_bytes[domain_index] + 1
+        if resp_bytes[domain_index + 1] != 0:
+            domain_name.append(".")
+
+    # we need to adjust where offset is to skip over the domain name in the answer
+    if labelPointer == False:
+        offset = offset + len(domain_name)
+    
+    addr_len = bytes_to_val([resp_bytes[offset+10], resp_bytes[offset+11]])
+
     for i in range(rr_ans):
         # grab ttl
-        ttl = bytes_to_val([resp_bytes[overall_answer_index+6], resp_bytes[overall_answer_index+7], \
-                                 resp_bytes[overall_answer_index+8], resp_bytes[overall_answer_index+9]])
+        ttl = bytes_to_val([resp_bytes[offset+6], resp_bytes[offset+7], \
+                            resp_bytes[offset+8], resp_bytes[offset+9]])
 
         # grab IP bytes, send to either parse_address_a or aaaa to get parsed
-        addr_bytes = resp_bytes[overall_answer_index+12:overall_answer_index+12+addr_len+1]
+        addr_bytes = resp_bytes[offset+12:offset+12+addr_len+1]
         if addr_len == 4:
             addr = parse_address_a(addr_len, addr_bytes)
         elif addr_len == 16:
             addr = parse_address_aaaa(addr_len, addr_bytes)
 
         # set up index for the next answer to process
-        if get_offset([resp_bytes[offset], resp_bytes[offset + 1]]) != 12:  # todo: fix
-            overall_answer_index += addr_len+12+len(domain_name)
+        if labelPointer == False:
+            offset += addr_len+12+len(domain_name)
         else:
-            overall_answer_index += addr_len+12 # 12 is the number of bytes between the start of the answer and the address byte
+            offset += addr_len+12 # 12 is the number of bytes between the start of the answer and the address byte
 
         domain_ttl_addr.append(("".join(domain_name), ttl, addr))
 
