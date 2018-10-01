@@ -33,30 +33,49 @@ TTL_SEC = {
 
 def val_to_bytes(value: int, n_bytes: int) -> list:
     '''Split a value into n bytes'''
-    raise NotImplementedError
+    byteLst = []
+    shiftedVal = value
+    for i in range(n_bytes):
+        newVal = shiftedVal & 0xFF
+        byteLst.insert(0, newVal)
+        shiftedVal = shiftedVal >> 8
+    return byteLst
 
 
 def bytes_to_val(bytes_lst: list) -> int:
     '''Merge n bytes into a value'''
-    raise NotImplementedError
+    value = 0
+    shift = 0
+    reshifted = []
+    for i in range(len(bytes_lst)-1, -1, -1):
+        reshifted.append(bytes_lst[i] << shift)
+        shift += 8
 
+    for i in range(len(reshifted)):
+        value += reshifted[i]
+
+    return value
 
 def get_left_bits(bytes_lst: list, n_bits: int) -> int:
     '''Extract left n bits of a two-byte sequence'''
-    raise NotImplementedError
+    val = bytes_to_val(bytes_lst)
+    return int(bin(val)[2:n_bits+2], 2)
 
 
 def get_right_bits(bytes_lst: list, n_bits) -> int:
     '''Extract right n bits bits of a two-byte sequence'''
-    raise NotImplementedError
+    val = bytes_to_val(bytes_lst)
+    return int(bin(val)[-n_bits:], 2)
 
 
 def read_zone_file(filename: str) -> tuple:
     '''Read the zone file and build a dictionary'''
+    # build a dictionary of domain names
+    # todo: ask: {domain_name: IP_address}?
     zone = dict()
     with open(filename) as zone_file:
         origin = zone_file.readline().split()[1].rstrip('.')
-        raise NotImplementedError
+        print(origin)
     
     return (origin, zone)
 
