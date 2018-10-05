@@ -71,14 +71,37 @@ def get_right_bits(bytes_lst: list, n_bits) -> int:
 def read_zone_file(filename: str) -> tuple:
     '''Read the zone file and build a dictionary'''
     # build a dictionary of domain names
-    # todo: ask: {domain_name: IP_address}?
-    zone = dict()
+    # {domain: [(ttl, class, type, address)]}
+    # missing domain name should be replaced with the one from the previous line
+    # missing TTL should be replaced with the default one (2nd line of the zone file)
+    # if a record contains multiple answers, return them all
+    # returns a tuple of (origin, zone_dict)
+    # todo: look at output closely to verify its correct
+    zone_dict = dict()
     with open(filename) as zone_file:
         origin = zone_file.readline().split()[1].rstrip('.')
-        print(origin)
-    
-    return (origin, zone)
+        default_ttl = zone_file.readline().split()[1]
 
+        previous_domain = None
+        for line in zone_file:
+            line = line.split()
+            domain = line[0]
+            # Nothing is missing, we all good here
+            if len(line) == 5:
+                zone_dict[domain] = [(line[1], line[2], line[3], line[4])]
+                previous_domain = domain
+            elif len(line) == 4:
+                # TTL is missing
+                if domain in zone_dict: # aka the first value is the TTL or class instead
+                    zone_dict[domain].append((default_ttl, line[1], line[2], line[3]))
+                # Domain is missing
+                else:
+                    zone_dict[previous_domain].append((line[0], line[1], line[2], line[3]))
+            # Both domain and TTL are missing
+            else:
+                zone_dict[previous_domain].append((default_ttl, line[0], line[1], line[2]))
+
+    return (origin, zone_dict)
 
 def parse_request(origin: str, msg_req: bytes) -> tuple:
     '''Parse the request'''
