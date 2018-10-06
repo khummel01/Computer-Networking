@@ -72,11 +72,6 @@ def read_zone_file(filename: str) -> tuple:
     '''Read the zone file and build a dictionary'''
     # build a dictionary of domain names
     # {domain: [(ttl, class, type, address)]}
-    # missing domain name should be replaced with the one from the previous line
-    # missing TTL should be replaced with the default one (2nd line of the zone file)
-    # if a record contains multiple answers, return them all
-    # returns a tuple of (origin, zone_dict)
-    # todo: look at output closely to verify its correct
     zone_dict = dict()
     with open(filename) as zone_file:
         origin = zone_file.readline().split()[1].rstrip('.')
@@ -91,9 +86,13 @@ def read_zone_file(filename: str) -> tuple:
                 zone_dict[domain] = [(line[1], line[2], line[3], line[4])]
                 previous_domain = domain
             elif len(line) == 4:
-                # TTL is missing
-                if domain in zone_dict: # aka the first value is the TTL or class instead
+                # TTL is missing, known domain
+                if domain in zone_dict:
                     zone_dict[domain].append((default_ttl, line[1], line[2], line[3]))
+                # TTL is missing, new domain
+                elif domain not in TTL_SEC:
+                    zone_dict[domain] = [(default_ttl, line[1], line[2], line[3])]
+                    previous_domain = domain
                 # Domain is missing
                 else:
                     zone_dict[previous_domain].append((line[0], line[1], line[2], line[3]))
@@ -103,9 +102,31 @@ def read_zone_file(filename: str) -> tuple:
 
     return (origin, zone_dict)
 
+
 def parse_request(origin: str, msg_req: bytes) -> tuple:
     '''Parse the request'''
-    raise NotImplementedError
+    # return tuple of (transaction_id, domain, query type, query)
+    transaction_id = bytes_to_val([msg_req[0], msg_req[1]])
+
+    overall_index = 12
+    domain_name = ""
+
+    # get domain name
+    for i in range(1, msg_req[overall_index] + 1):
+        domain_chr = chr(bytes_to_val([msg_req[overall_index + i]]))
+        domain_name = domain_name + domain_chr
+        print(bytes_to_val([msg_req[overall_index + i]]), domain_chr)
+        overall_index += msg_req[overall_index] + 1
+
+    # find index where domain name ends
+    while msg_req[overall_index] != 0:
+        overall_index += 1
+
+    # todo: raise value error if the type, class, or zone (origin) cannot be processed
+    type = bytes_to_val([msg_req[overall_index+1], msg_req[overall_index+2]])
+    clas = bytes_to_val([msg_req[overall_index+3], msg_req[overall_index+4]])
+
+    return (transaction_id, domain_name, type, msg_req[12:])
 
 
 def format_response(zone: dict, trans_id: int, qry_name: str, qry_type: int, qry: bytearray) -> bytearray:
@@ -121,7 +142,9 @@ def run(filename: str) -> None:
     print("Listening on %s:%d" % (HOST, PORT))
 
     while True:
+        print("here")
         (request_msg, client_addr) = server_sckt.recvfrom(512)
+        print(request_msg)
         try:
             trans_id, domain, qry_type, qry = parse_request(origin, request_msg)
             msg_resp = format_response(zone, trans_id, domain, qry_type, qry)
