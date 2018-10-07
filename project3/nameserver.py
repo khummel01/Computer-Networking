@@ -106,33 +106,49 @@ def read_zone_file(filename: str) -> tuple:
 def parse_request(origin: str, msg_req: bytes) -> tuple:
     '''Parse the request'''
     # return tuple of (transaction_id, domain, query type, query)
+    if origin != 'cs430.luther.edu':
+        raise  ValueError("Unknown zone")
+
     transaction_id = bytes_to_val([msg_req[0], msg_req[1]])
 
     overall_index = 12
     domain_name = ""
 
     # get domain name
-    for i in range(1, msg_req[overall_index] + 1):
-        domain_chr = chr(bytes_to_val([msg_req[overall_index + i]]))
+    for i in range(1, msg_req[12]+1):
+        domain_chr = chr(bytes_to_val([msg_req[12+i]]))
         domain_name = domain_name + domain_chr
-        print(bytes_to_val([msg_req[overall_index + i]]), domain_chr)
-        overall_index += msg_req[overall_index] + 1
 
     # find index where domain name ends
     while msg_req[overall_index] != 0:
         overall_index += 1
 
-    # todo: raise value error if the type, class, or zone (origin) cannot be processed
     type = bytes_to_val([msg_req[overall_index+1], msg_req[overall_index+2]])
     clas = bytes_to_val([msg_req[overall_index+3], msg_req[overall_index+4]])
+
+    if type != 1 and type != 28:
+        raise ValueError("Unknown query type")
+    if clas != 1:
+        raise  ValueError("Unknown class")
 
     return (transaction_id, domain_name, type, msg_req[12:])
 
 
 def format_response(zone: dict, trans_id: int, qry_name: str, qry_type: int, qry: bytearray) -> bytearray:
     '''Format the response'''
-    raise NotImplementedError
+    # returns DNS response
+    # use either label or pointer to format the domain name
+    # length of response is the length of the value of the key in the zone dictionary
+    respByteArr = bytearray()
+    trans_id_bytes = val_to_bytes(trans_id, 2)
+    respByteArr.append(trans_id_bytes[0])
+    respByteArr.append(trans_id_bytes[1])
+    # respByteArr.append(hex(81))
+    respByteArr.append(0)
+    print(qry)
+    # respByteArr.append(len(qry_name))
 
+    return respByteArr
 
 def run(filename: str) -> None:
     '''Main server loop'''
