@@ -136,17 +136,81 @@ def parse_request(origin: str, msg_req: bytes) -> tuple:
 
 def format_response(zone: dict, trans_id: int, qry_name: str, qry_type: int, qry: bytearray) -> bytearray:
     '''Format the response'''
-    # returns DNS response
-    # use either label or pointer to format the domain name
-    # length of response is the length of the value of the key in the zone dictionary
     respByteArr = bytearray()
+
+    # trans_id
     trans_id_bytes = val_to_bytes(trans_id, 2)
     respByteArr.append(trans_id_bytes[0])
     respByteArr.append(trans_id_bytes[1])
-    # respByteArr.append(hex(81))
+
+    # query response type
+    qry_rsp_type = val_to_bytes(129, 2)
+    respByteArr.append(qry_rsp_type[1])
+    respByteArr.append(qry_rsp_type[0])
+
+    # number of questions # todo: will the number of questions always be 1?
     respByteArr.append(0)
-    print(qry)
-    # respByteArr.append(len(qry_name))
+    respByteArr.append(1)
+
+    # number of answers
+    num_ans = 0
+    for ans in zone[qry_name]:
+        if DNS_TYPES[qry_type] in ans:
+            num_ans += 1
+    num_ans_bytes = val_to_bytes(num_ans, 2)
+    respByteArr.append(num_ans_bytes[0])
+    respByteArr.append(num_ans_bytes[1])
+
+    # authority RRs
+    respByteArr.append(0)
+    respByteArr.append(0)
+
+    # additional RRs
+    respByteArr.append(0)
+    respByteArr.append(0)
+
+    # query
+    for byte in qry:
+        respByteArr.append(byte)
+
+    # todo: pointer
+    # ANSWERS
+    for ans in zone[qry_name]:
+        if DNS_TYPES[qry_type] in ans:
+            # using pointer
+            respByteArr.append(192)
+            respByteArr.append(12)
+            # type
+            type_bytes = val_to_bytes(qry_type, 2)
+            respByteArr.append(type_bytes[0])
+            respByteArr.append(type_bytes[1])
+            # class
+            respByteArr.append(0)
+            respByteArr.append(1)
+            # ttl
+            ttl_bytes = val_to_bytes(TTL_SEC[ans[0]], 4)
+            respByteArr.append(ttl_bytes[0])
+            respByteArr.append(ttl_bytes[1])
+            respByteArr.append(ttl_bytes[2])
+            respByteArr.append(ttl_bytes[3])
+            # data length
+            if qry_type == 1: #ipv4
+                data_len_bytes = val_to_bytes(4, 2)
+            else: # ipv6
+                data_len_bytes = val_to_bytes(16, 2)
+            respByteArr.append(data_len_bytes[0])
+            respByteArr.append(data_len_bytes[1])
+            # address
+            if qry_type == 1:
+                addr = ans[3].split(".")
+                for i in range(4):
+                    respByteArr.append(int(addr[i]))
+            else:
+                addr = ans[3].split(":")
+                for i in range(8):
+                    respByteArr.append(int(addr[i][0:2], 16))
+                    respByteArr.append(int(addr[i][2:], 16))
+                    print(addr[i][0:2], addr[i][2:])
 
     return respByteArr
 
@@ -158,9 +222,7 @@ def run(filename: str) -> None:
     print("Listening on %s:%d" % (HOST, PORT))
 
     while True:
-        print("here")
         (request_msg, client_addr) = server_sckt.recvfrom(512)
-        print(request_msg)
         try:
             trans_id, domain, qry_type, qry = parse_request(origin, request_msg)
             msg_resp = format_response(zone, trans_id, domain, qry_type, qry)
