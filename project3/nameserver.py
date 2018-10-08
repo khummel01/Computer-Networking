@@ -210,7 +210,6 @@ def format_response(zone: dict, trans_id: int, qry_name: str, qry_type: int, qry
                 for i in range(8):
                     respByteArr.append(int(addr[i][0:2], 16))
                     respByteArr.append(int(addr[i][2:], 16))
-                    print(addr[i][0:2], addr[i][2:])
 
     return respByteArr
 

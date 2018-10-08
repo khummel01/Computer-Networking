@@ -122,7 +122,8 @@ def format_query(q_type: int, q_domain: list) -> bytearray:
 def send_request(q_message: bytearray, q_server: str) -> bytes:
     '''Contact the server'''
     client_sckt = socket(AF_INET, SOCK_DGRAM)
-    client_sckt.sendto(q_message, (q_server, PORT))
+    client_sckt.connect((HOST, PORT))
+    client_sckt.sendto(q_message, (HOST, PORT))
     (q_response, _) = client_sckt.recvfrom(2048)
     client_sckt.close()
 
