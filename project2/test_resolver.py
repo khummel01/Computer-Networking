@@ -65,7 +65,6 @@ class TestResolver:
         exception_msg = excinfo.value.args[0]
         assert exception_msg == 'Unknown query type'
 
-    # todo: NOT PASSING
     def test_format_query(self):
         '''Format a query'''
         assert format_query(1, ['luther', 'edu']) == b'OB\x01\x00\x00\x01\x00\x00\x00\x00\x00\x00\x06luther\x03edu\x00\x00\x01\x00\x01'
