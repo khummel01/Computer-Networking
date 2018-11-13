@@ -9,18 +9,16 @@ PORT = 4300  # Open http://127.0.0.2:4300 in a browser
 LOGFILE = "webserver.log"
 
 
-def update_log(data, data_dict):
+def update_log(data_dict):
     time_of_request = datetime.now()
     with open(LOGFILE, 'a') as logFile:
-        logFile.write(str(time_of_request) + " | " + data_dict["File"] + " | " + data_dict["Address"] + " | " + data_dict["User-Agent"])
+        logFile.write(str(time_of_request) + " | " + data_dict["File"] + " | " + data_dict["Address"] + " | " + data_dict["User-Agent"] + "\n")
 
 def get_header(response_code, file_size=0):
     date = datetime.now().strftime("%c")
-
     if response_code == 200:
-        # can we hard code http/1.1?
         return 'HTTP/1.1 200 OK\nContent-Length: {}\nContent-Type: plain text; charset=utf-8\nDate: {}\n' \
-                'Last-Modified: Wed Aug 29 11:00:00 2018\nServer: CS430-KATIE'.format(file_size, date)
+                'Last-Modified: Wed Aug 29 11:00:00 2018\nServer: CS430-KATIE\r\n\r\n'.format(file_size, date)
     elif response_code == 404:
         return 'HTTP/1.1 404 Not Found\r\n\r\n'
     return 'HTTP/1.1 405 Method Not Allowed\r\n\r\n'
@@ -46,10 +44,14 @@ def server():
             for i in range(2, len(data)):
                 if len(data[i]) > 1:
                     data_snippet = data[i].split(":")
-                    data_dict[data_snippet[0]] = data_snippet[1]
+                    if data_snippet[0] == "User-Agent" and len(data_snippet) == 3:
+                        data_dict[data_snippet[0]] = data_snippet[1] + data_snippet[2]
+                    else:
+                        data_dict[data_snippet[0]] = data_snippet[1]
 
+            # Determine request method
             if data_dict["Request Method"] == "GET":
-                update_log(data, data_dict)
+                update_log(data_dict)
                 try:
                     file_name = data_dict["File"][1:]
                     file_to_send = open(file_name, "rb")
@@ -59,20 +61,15 @@ def server():
                     header = get_header(200, file_size).encode()
 
                     conn.send(header)
-                    conn.send(b'\r\n\r\n')
                     conn.send(response)
-                    conn.close()
 
                 except Exception as e:
                     header = get_header(404).encode()
                     conn.send(header)
-                    conn.close()
             else:
-                # curl -i -X
                 header = get_header(405).encode()
-                # conn.send("POST REQUEST NOT ALLOWED\n".encode())
                 conn.send(header)
-                conn.close()
+            conn.close()
 
 
 def main():
