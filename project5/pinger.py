@@ -59,6 +59,13 @@ def parse_reply(
     my_socket: socket.socket, req_id: int, timeout: int, addr_dst: str
 ) -> tuple:
     """Receive an Echo reply"""
+    '''
+    parse_reply: receives and parses an echo reply. Takes the following arguments: 
+    socket, request id, timeout, and the destination address. Returns a tuple of the 
+    destination address, packet size, roundtrip time, time to live, and sequence number. 
+    You need to modify lines between labels TODO and DONE. This function should raise 
+    an error if the response message type, code, or checksum are incorrect.
+    '''
     time_left = timeout
     while True:
         started_select = time.time()
@@ -120,9 +127,36 @@ def send_request(addr_dst: str, seq_num: int, timeout: int = 1) -> tuple:
 
 
 def ping(host: str, pkts: int, timeout: int = 1) -> None:
-    """Main loop"""
+    '''Main loop: displays host statistics '''
     # TODO: Implement the main loop
 
+    with open('output', 'a') as outfile:
+        rtt_arr = []
+        num_pkts_received = 0
+        for i in range(pkts):
+            try:
+                dest_addr, pkt_size, rtt, ttl, seq_num = send_request(host, pkts, timeout) # send_request() calls format_request(), then parse_reply() within itself
+                if i == 0:
+                    outfile.write("--- Ping {} ({}) using Python ---\n\n".format(host, dest_addr))
+                num_pkts_received += 1
+                rtt_arr.append(rtt)
+                outfile.write(str(pkt_size) + " bytes from " + dest_addr + ": icmp_seq=" + str(seq_num) +
+                              " TTL=" + str(ttl) + " time=" + str(rtt) + " ms\n")
+            except TimeoutError as te:
+                outfile.write("No response: " + te + "\n")
+        '''
+        STATS TO REPORT:
+            packet loss
+            maximum round-trip time
+            minimum RTT
+            average RTT
+            RTT standard deviation
+        '''
+        outfile.write("\n--- " + host + "(" + dest_addr + ") ping statistics ---\n".format(host, dest_addr))
+        if num_pkts_received == 0:
+            outfile.write(str(pkts) + " transmitted, 0 received, 100% packet loss\n\n")
+        else:
+            outfile.write() #todo:finish
     # DONE
     return
 
