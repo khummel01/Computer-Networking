@@ -150,31 +150,30 @@ def send_request(addr_dst: str, seq_num: int, timeout: int = 1) -> tuple:
 
 def ping(host: str, pkts: int, timeout: int = 1) -> None:
     '''Main loop: displays host statistics '''
-    with open('output.txt', 'a') as outfile:
-        rtt_arr = []
-        num_pkts_received = 0
-        outfile.write("--- Ping {} ({}) using Python ---\n\n".format(host, socket.gethostbyname(host)))
-        for i in range(pkts):
-            try:
-                dest_addr, pkt_size, rtt, ttl, seq_num = send_request(host, i+1, timeout)
-                num_pkts_received += 1
-                rtt_arr.append(rtt)
-                outfile.write("{:d} bytes from {}: icmp_seq={:d} TTL={:d} time={:.2f} ms\n".format(pkt_size, dest_addr, seq_num, ttl, rtt))
+    rtt_arr = []
+    num_pkts_received = 0
+    print("--- Ping {} ({}) using Python ---\n".format(host, socket.gethostbyname(host)))
+    for i in range(pkts):
+        try:
+            dest_addr, pkt_size, rtt, ttl, seq_num = send_request(host, i+1, timeout)
+            num_pkts_received += 1
+            rtt_arr.append(rtt)
+            print("{:d} bytes from {}: icmp_seq={:d} TTL={:d} time={:.2f} ms".format(pkt_size, dest_addr, seq_num, ttl, rtt))
 
-            except TimeoutError as toe:
-                outfile.write("No response: " + str(toe) + "\n")
+        except TimeoutError as toe:
+            print("No response: " + str(toe))
 
-        outfile.write("\n--- {} ({}) ping statistics ---\n".format(host, socket.gethostbyname(host)))
-        if num_pkts_received == 0:
-            outfile.write("{} transmitted, 0 received, 100% packet loss\n\n".format(str(pkts)))
-        else:
-            packet_loss_perct = 0
-            if pkts != num_pkts_received:
-                packet_loss_perct = round((1-(num_pkts_received/pkts))*100)
-            outfile.write("{:d} packets transmitted, {:d} received, {:d}% packet loss\nrtt "
-                          "min/avg/max/mdev = {:.3f}/{:.3f}/{:.3f}/{:.3f} ms\n\n".format(pkts, num_pkts_received,
-                            packet_loss_perct, min(rtt_arr), mean(rtt_arr),
-                            max(rtt_arr), stdev(rtt_arr)))
+    print("\n--- {} ({}) ping statistics ---".format(host, socket.gethostbyname(host)))
+    if num_pkts_received == 0:
+        print("{} transmitted, 0 received, 100% packet loss".format(str(pkts)))
+    else:
+        packet_loss_perct = 0
+        if pkts != num_pkts_received:
+            packet_loss_perct = round((1-(num_pkts_received/pkts))*100)
+        print("{:d} packets transmitted, {:d} received, {:d}% packet loss\nrtt "
+                      "min/avg/max/mdev = {:.3f}/{:.3f}/{:.3f}/{:.3f} ms\n".format(pkts, num_pkts_received,
+                        packet_loss_perct, min(rtt_arr), mean(rtt_arr),
+                        max(rtt_arr), stdev(rtt_arr)))
     return
 
 
