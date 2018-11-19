@@ -10,6 +10,7 @@ import sys
 import time
 import socket
 from statistics import mean, stdev
+from copy import deepcopy
 
 ECHO_REQUEST_TYPE = 8
 ECHO_REPLY_TYPE = 0
@@ -77,59 +78,34 @@ def parse_reply(
         rtt = (time_rcvd-started_select)*1000
 
         pkt_rcvd, addr = my_socket.recvfrom(1024)
-        addr_dst_ip = socket.gethostbyname(addr_dst) # me
+        addr_dst_ip = socket.gethostbyname(addr_dst)
         if addr[0] != addr_dst_ip:
             raise ValueError(f"Wrong sender: {addr[0]}")
 
-        # TODO: Extract ICMP header from the IP packet and parse it
-        #This function should raise an error if the response mesasge, type, code, or checksum are incorrect
+        byt_arr = bytearray(pkt_rcvd)
 
-        # 20 bytes of ip stuff, 8 bytes of icmp header
-        # ip header: dest_addr, TTL (major thing you want from ip)
-        # icmp: type, code, seq_num, checksum <-- check that these match
-            # header: Type=0, code=0, checksum
+        # Extract type, code, and sequence number from ICMP header
+        typ = byt_arr[20]
+        code = byt_arr[21]
+        seq_num = byt_arr[26]
 
-        # conversation with Roman:
-        # start Wireshark, look at the ICMP exchange
-        # once you receive pkt, zero out the chksum, send (just header?) to checksum function
-        # look at htous
-        # if type or class is not 0, raise value error, catch in main and report it as a lost packet
-
-        # byte_arr = bytearray(pkt_rcvd) # uncessary
-        # ICMP header info
-        icmp_header_data = pkt_rcvd[20:]
-        icmp_chksum = pkt_rcvd[22:26]
-        typ = pkt_rcvd[20]
-        code = pkt_rcvd[21]
-        #todo: checksum is always 0 for some reason
-        # a = byte_arr[20:22]
-        # b = byte_arr[24:]
-        # icmp_header_without_chksum = a+b
-        # print("a: ", a)
-        # print("b: ", b)
-        # print(icmp_header_without_chksum)
-
-        # print_raw_bytes(pkt_rcvd)
-
-        # Validate type, code, and checksum
-        pkt_chksum = checksum(icmp_header_data)
-        # validate_chksum = checksum(icmp_header_without_chksum)
-        # print("icmp_chksum: ", icmp_chksum, "function chk_sum: ", validate_chksum)
-        if typ != ECHO_REPLY_TYPE and code != ECHO_REPLY_CODE: #and icmp_chksum != validate_chksum:
+        # Validate checksum
+        icmp_chksum = int.from_bytes(byt_arr[22:24], byteorder="big")
+        copy_icmp = deepcopy(byt_arr[20:])
+        copy_icmp[2] = 0
+        copy_icmp[3] = 0
+        validate_chksum = checksum(copy_icmp)
+        if typ != ECHO_REPLY_TYPE and code != ECHO_REPLY_CODE and icmp_chksum != validate_chksum:
             raise ValueError
 
-        # IP header info
-        # dest_addr = byte_arr[16:20] # don't need
-        pkt_size = sum(pkt_rcvd[2:4])
+        # Exract destination address, packet size, and TTL from IP header
+        pkt_size = int.from_bytes(byt_arr[2:4], byteorder="big")
         ttl = pkt_rcvd[8]
-        seq_num = sum(pkt_rcvd[26:28]) #todo: do we even need this?
 
         # DONE: End of ICMP parsing
         time_left = time_left - how_long_in_select
         if time_left <= 0:
             raise TimeoutError("Request timed out after 1 sec")
-
-        #todo: return tuple of the destination address, packet size, roundtrip time, time to live, and sequence number
         return (addr_dst_ip, pkt_size, rtt, ttl, seq_num)
 
 def format_request(req_id: int, seq_num: int) -> bytes:
@@ -180,17 +156,13 @@ def ping(host: str, pkts: int, timeout: int = 1) -> None:
         outfile.write("--- Ping {} ({}) using Python ---\n\n".format(host, socket.gethostbyname(host)))
         for i in range(pkts):
             try:
-                dest_addr, pkt_size, rtt, ttl, seq_num = send_request(host, pkts, timeout)
-                # if i == 0:
-                #     outfile.write("--- Ping {} ({}) using Python ---\n\n".format(host, dest_addr))
+                dest_addr, pkt_size, rtt, ttl, seq_num = send_request(host, i+1, timeout)
                 num_pkts_received += 1
                 rtt_arr.append(rtt)
-                #todo (below): should icmp_seq be passed in?
-                outfile.write("{:d} bytes from {}: icmp_seq={:d} TTL={:d} time={:.2f} ms\n".format(pkt_size, dest_addr, i+1, ttl, rtt))
+                outfile.write("{:d} bytes from {}: icmp_seq={:d} TTL={:d} time={:.2f} ms\n".format(pkt_size, dest_addr, seq_num, ttl, rtt))
 
             except TimeoutError as toe:
                 outfile.write("No response: " + str(toe) + "\n")
-            # except TypeError: pass
 
         outfile.write("\n--- {} ({}) ping statistics ---\n".format(host, socket.gethostbyname(host)))
         if num_pkts_received == 0:
@@ -209,4 +181,3 @@ def ping(host: str, pkts: int, timeout: int = 1) -> None:
 if __name__ == "__main__":
     for rir in REGISTRARS:
         ping(rir, 5)
-    # ping(REGISTRARS[0], 5)
