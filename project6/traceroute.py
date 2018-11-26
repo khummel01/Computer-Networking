@@ -67,7 +67,6 @@ def parse_reply(packet: bytes) -> bool:
         raise ValueError(f"Incorrect type: {icmp_msg_type}. Expected {', '.join([str(x) for x in expected_types])}.")
     return True
 
-#todo: not done
 def send_request(packet: bytes, addr_dst: str, ttl: int) -> socket:
     """Send an Echo Request"""
     proto = socket.getprotobyname("icmp")
@@ -94,9 +93,7 @@ def receive_reply(open_socket: socket, timeout: int = 1) -> tuple:
     started_select = time.time()
     what_ready = select.select([open_socket], [], [], time_left)
     how_long_in_select = time.time() - started_select
-    print(what_ready)
     if not what_ready[0]:
-        print("\nin what_ready timeout\n")
         raise TimeoutError("Request timed out")
 
     pkt_rcvd, addr = open_socket.recvfrom(1024)
@@ -156,24 +153,12 @@ def traceroute(hostname: str) -> None:
 
     print("\nTrace complete.")
 
-    #         if v_error_msg:
-    #     if to_error_msg:
-    #         try:
-    #         try:
-    #             continue
-    #         except TimeoutError as te:
-    #      break
-    #     sys.exit(1)
-    # except IndexError:
-    # continue
 
-
-
-# # my_icmp_socket.settimeout(timeout)
 def main(args):
-    traceroute(args[1])
-    # print(f"Usage: {args[0]} <hostname>")
+    try:
+        traceroute(args[1])
+    except socket.gaierror:
+        print(f"Usage: {args[0]} <hostname>")
 
 if __name__ == "__main__":
     main(sys.argv)
-
