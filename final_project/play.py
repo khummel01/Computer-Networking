@@ -1,4 +1,8 @@
 ba = bytearray()
-ba.append(ord("a"))
-print(ba)
-# print(ord("a"))
+ba.append(127)
+ba.append(ord('b'))
+ba.append(ord('c'))
+# x = str(ba[0:2])
+# y = 1
+
+print(ba[0])

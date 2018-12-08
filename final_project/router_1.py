@@ -15,7 +15,7 @@ HOST_ID = os.path.splitext(__file__)[0].split("_")[-1]
 THIS_NODE = f"127.0.0.{HOST_ID}"
 PORT = 4300
 NEIGHBORS = set()
-ROUTING_TABLE = {} #{'destination':[cost, 'next_hop']}
+ROUTING_TABLE = {} # {'destination':[cost, 'next_hop']}
 TIMEOUT = 5
 MESSAGES = [
     "Cosmic Cuttlefish",
@@ -40,25 +40,6 @@ def read_file(filename: str) -> None:
             ROUTING_TABLE[neighbor[0]] = [neighbor[0], neighbor[1]]
             line = infile.readline()
 
-    # Start listening on UDP port 4300
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-        s.bind((THIS_NODE, PORT))
-        s.listen(1)
-
-        # Print initial greeting message
-        print(f"{time.strftime('%H:%M:%S')} | Router {THIS_NODE} here")
-        print(f"{time.strftime('%H:%M:%S')} | Binding to {THIS_NODE}:{PORT}")
-        print(f"{time.strftime('%H:%M:%S')} | Listening on {THIS_NODE}:{PORT}")
-
-        conn, addr = s.accept()
-
-        with conn:
-            while True:
-                data = conn.recv(1024)
-                print(data)
-                if not data:
-                    break
-
 def format_update():
     """Format update message"""
     update_msg = bytearray()
@@ -80,27 +61,32 @@ def parse_update(msg, neigh_addr):
         # Extract address
         address = ""
         for i in range(4):
-            address = address + str(int.from_bytes(msg[index], byteorder="big"))
+            address = address + msg[index]
             if i < 3:
                 address = address + "."
             index += 1
         # Extract cost
-        pos_new_cost = str(int.from_bytes(msg[index], byteorder="big"))
+        cost = msg[index]
         index += 1
 
-        # Check if the table needs to be updated #todo: add cost of current
-        if neigh_addr in ROUTING_TABLE and ROUTING_TABLE[neigh_addr][0] != pos_new_cost:
-            ROUTING_TABLE[neigh_addr] = [pos_new_cost, address]
+        # Add neighbors to NEIGHBORS
+        NEIGHBORS.add(address)
+
+        # Check if the table needs to be updated
+        if address in ROUTING_TABLE and ROUTING_TABLE[address][0] > cost+ROUTING_TABLE[neigh_addr][0]:
+            ROUTING_TABLE[address] = [cost, neigh_addr]
             isUpdated = True
         else:
-            ROUTING_TABLE[neigh_addr] = [pos_new_cost, address]
+            ROUTING_TABLE[address] = [cost, neigh_addr]
             isUpdated = True
 
     return isUpdated
 
 def send_update(node):
     """Send update"""
-    raise NotImplementedError
+    update_msg = format_update()
+    # todo: pass in socket?
+    socket.sendto(update_msg, (node, PORT))
 
 
 def format_hello(msg_txt, src_node, dst_node):
@@ -120,20 +106,31 @@ def format_hello(msg_txt, src_node, dst_node):
         hello_msg.append(number)
 
     # Append text
-    #todo: is this right?
     for ch in msg_txt:
         hello_msg.append(ord(ch))
 
     return hello_msg
 
+# deliver_msg(msg)
 def parse_hello(msg):
     """Send the message to an appropriate next hop"""
-    next_hop = msg[5:9]
+    dst_addr = ""
+    for i in range(5,9):
+        dst_addr = dst_addr + str(msg[i])
+        if i < 8:
+            dst_addr = dst_addr + "."
+    next_hop = ROUTING_TABLE[dst_addr]
+    #todo: send to next hop
+
+# todo: check if you are the dest, if not, send to the next ho
+def deliver_msg(msg):
+
 
 
 def send_hello(msg_txt, src_node, dst_node):
     """Send a message"""
     format_hello_msg = format_hello(msg_txt, src_node, dst_node)
+    #todo: finish
 
 
 def print_status():
@@ -145,7 +142,78 @@ def print_status():
 
 def main(args: list):
     """Router main loop"""
+    # NOTE: this is only for testing! The filename will be passed as a command line argument for final
     read_file('network_1_config.txt')
+
+    # Print initial greeting message
+    print(f"{time.strftime('%H:%M:%S')} | Router {THIS_NODE} here")
+    print(f"{time.strftime('%H:%M:%S')} | Binding to {THIS_NODE}:{PORT}")
+    print(f"{time.strftime('%H:%M:%S')} | Listening on {THIS_NODE}:{PORT}")
+
+    # Print initial status
+    print_status()
+
+    # Start listening on UDP port 4300
+    server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    server.setblocking(0)
+    server.bind((THIS_NODE, PORT))
+    server.listen()
+    inputs = [server]
+    outputs = []
+    message_queues = {}
+
+    # todo: send initial hello message
+    for neighbor in ROUTING_TABLE:
+        send_hello(random.choice(MESSAGES), THIS_NODE, neighbor)
+
+    # todo: once every minute or show, send another update, hello
+        # should be able to send hello to everyone in your known network
+    # todo: first decide where you want to send to, look up in distance vector, then create socket to that neighbor (create packet)
+
+    while inputs:
+        readable, writable, exceptional = select.select(
+            inputs, outputs, inputs)
+
+        for s in readable:
+            if s is server:
+                connection, client_address = s.accept()
+                connection.setblocking(0) # makes the socket nonblocking
+                # Add connection to listener list
+                inputs.append(connection)
+                # Add connection to message_queues
+                message_queues[connection] = [] # Queue.Queue()
+            else:
+                data = s.recv(1024)
+                if data:
+                    print("MESSAGE_QUEUES: ", message_queues)
+                    print("DATA:")
+                    print(data)
+                    message_queues[s].append(data)
+                    # Add IP address to neighbor list #todo: may not be necessary
+                    if client_address not in ROUTING_TABLE:
+                        ROUTING_TABLE[client_address] = []
+                    if s not in outputs:
+                        outputs.append(s)
+                else:
+                    if s in outputs:
+                        outputs.remove(s)
+                    inputs.remove(s)
+                    s.close()
+                    del message_queues[s]
+        # NOT NEEDED, NO QUEUE OF OUTGOING MESSAGES, this is already handled by the functions above
+        # for s in writable:
+        #     if len(message_queues[s]) == 0:
+        #         outputs.remove(s)
+        #     else:
+        #         next_msg = message_queues[s].pop(0)
+        #         s.send(next_msg)
+
+        for s in exceptional:
+            inputs.remove(s)
+            if s in outputs:
+                outputs.remove(s)
+            s.close()
+            del message_queues[s]
 
 
 if __name__ == "__main__":
