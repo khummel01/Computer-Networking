@@ -1,8 +1,10 @@
 ba = bytearray()
-ba.append(127)
-ba.append(ord('b'))
-ba.append(ord('c'))
-# x = str(ba[0:2])
-# y = 1
+ba.extend('hello there'.encode('latin-1'))
+print(ba.decode())
 
-print(ba[0])
+x = set()
+x.add(1)
+x.add(5)
+x.add(9)
+y = list(x)
+print(y)

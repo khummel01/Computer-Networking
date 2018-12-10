@@ -36,6 +36,7 @@ def read_file(filename: str) -> None:
         # Update ROUTING_TABLE
         line = infile.readline()
         while line != "\n":
+            print("line:",line,"end")
             neighbor = line.split()
             ROUTING_TABLE[neighbor[0]] = [int(neighbor[1]), neighbor[0]]
             NEIGHBORS.add(neighbor[0])

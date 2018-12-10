@@ -38,15 +38,15 @@ def read_file(filename: str) -> None:
         while line != "\n":
             neighbor = line.split()
             ROUTING_TABLE[neighbor[0]] = [int(neighbor[1]), neighbor[0]]
-            line = infile.readline()
             NEIGHBORS.add(neighbor[0])
+            line = infile.readline()
 
 def format_update():
     """Format update message"""
     update_msg = bytearray()
     update_msg.append(0)
     for node in ROUTING_TABLE:
-        address = ROUTING_TABLE[node][1].split('.')
+        address = node.split('.')
         cost = ROUTING_TABLE[node][0]
         for number in address:
             update_msg.append(int(number))
@@ -76,73 +76,77 @@ def parse_update(msg, neigh_addr):
             cost_to_addr = cost+ROUTING_TABLE[neigh_addr][0]
             if address in ROUTING_TABLE:
                 if ROUTING_TABLE[address][0] > cost_to_addr:
-                    ROUTING_TABLE[address] = [cost_to_addr, neigh_addr]
+                    ROUTING_TABLE[address] = [cost_to_addr, ROUTING_TABLE[neigh_addr][1]]
                     isUpdated = True
             else:
-                ROUTING_TABLE[address] = [cost_to_addr, neigh_addr]
+                ROUTING_TABLE[address] = [cost_to_addr, ROUTING_TABLE[neigh_addr][1]]
                 isUpdated = True
 
     return isUpdated
 
-
-def send_update(node, socket):
+def send_update(neigh_addr, socket):
     """Send update"""
     update_msg = format_update()
-    socket.sendto(update_msg, (node, 4300+int(node[-1])))
+    socket.sendto(update_msg, (neigh_addr, 4300+int(neigh_addr[-1])))
 
-
-def format_hello(msg_txt, src_node, dst_node):
+def format_hello(msg, src_addr, dst_addr):
     """Format hello message"""
     # Append type
     hello_msg = bytearray()
     hello_msg.append(1)
 
     # Append source address
-    src_addr = src_node.split('.')
-    for number in src_addr:
+    src_addr_split = src_addr.split('.')
+    for number in src_addr_split:
         hello_msg.append(int(number))
 
     # Append destination address
-    dst_addr = dst_node.split('.')
-    for number in dst_addr:
+    dst_addr_split = dst_addr.split('.')
+    for number in dst_addr_split:
         hello_msg.append(int(number))
 
     # Append text
-    hello_msg.extend(msg_txt.encode('latin-1'))
+    hello_msg.extend(msg.encode('latin-1'))
 
     return hello_msg
 
 def parse_hello(msg, socket):
     """Parse hello message"""
     dst_addr = ""
-    for i in range(5,9):
+    for i in range(5, 9):
         dst_addr = dst_addr + str(msg[i])
         if i < 8:
             dst_addr = dst_addr + "."
 
     # This node is not the destination, forward to next hop
     if dst_addr != THIS_NODE:
-        deliver_msg(msg, socket)
+        forward_msg(msg, dst_addr, socket)
 
     # This node is the destination, print hello message
     else:
         src_addr = ""
         for i in range(1, 5):
             src_addr = src_addr + str(msg[i])
-            if i < 8:
+            if i < 4:
                 src_addr = src_addr + "."
-        print(f"{time.strftime('%H:%M:%S')} | Received {msg[9:]} from {src_addr}")
+        print(f"{time.strftime('%H:%M:%S')} | Received {msg[9:].decode()} from {src_addr}")
 
-def deliver_msg(msg, dst_addr, socket):
-    """Send the message to an appropriate next hop"""
-    next_hop = ROUTING_TABLE[dst_addr]
-    socket.sendto(msg, (next_hop, PORT))
+def forward_msg(msg, dst_addr, socket):
+    """Send the message to the appropriate next hop"""
+    next_hop = ROUTING_TABLE[dst_addr][1]
+    print(f"{time.strftime('%H:%M:%S')} | Sending {msg[9:].decode()} to {dst_addr} via {next_hop}")
+    socket.sendto(msg, (next_hop, 4300+int(next_hop[-1])))
 
-def send_hello(msg_txt, src_node, dst_node, socket):
+def send_hello(msg, socket):
     """Send a message"""
-    format_hello_msg = format_hello(msg_txt, src_node, dst_node)
-    socket.sendto(format_hello_msg, (dst_node, PORT))
-
+    dst_addr = ""
+    for i in range(5, 9):
+        dst_addr = dst_addr + str(msg[i])
+        if i < 8:
+            dst_addr = dst_addr + "."
+    next_hop = ROUTING_TABLE[dst_addr][1]
+    print(f"{time.strftime('%H:%M:%S')} | Sending {msg[9:].decode()} to {dst_addr} via {next_hop}")
+    socket.sendto(msg, (next_hop, 4300+int(next_hop[-1])))
 
 def print_status():
     """Print status"""
@@ -153,8 +157,7 @@ def print_status():
 
 def main(args: list):
     """Router main loop"""
-    # NOTE: this is only for testing! The filename will be passed as a command line argument for final
-    read_file('network_1_config.txt')
+    read_file(args[1])
 
     # Print initial greeting message
     print(f"{time.strftime('%H:%M:%S')} | Router {THIS_NODE} here")
@@ -184,7 +187,7 @@ def main(args: list):
         send_update(neighbor, server)
 
     # Start timer for hello messages
-    startime = time.time()
+    start_time = time.time()
 
     while read_from:
         readable, writable, exceptional = select.select(
@@ -202,7 +205,7 @@ def main(args: list):
                     print(f"{time.strftime('%H:%M:%S')} | Table updated with information from {addr[0]}")
                     print_status()
 
-                    # Let other routers now that you updated
+                    # Let other routers know that about the update
                     if out_sock in message_queues:
                         message_queues[out_sock].append(format_update())
                     else:
@@ -210,38 +213,18 @@ def main(args: list):
                     write_to.append(out_sock)
 
             # This is a hello message
-            # else:
-            #     # dst_addr
-            #     parse_hello(data, s)
-            #
-            #         # Add IP address to neighbor list #todo: may not be necessary
-            #         if client_address not in ROUTING_TABLE:
-            #             ROUTING_TABLE[client_address] = []
-            #         if s not in outputs:
-            #             outputs.append(s)
-                # else:
-                #     print('HERERERERERER')
-                #     if s in outputs:
-                #         outputs.remove(s)
-                #     inputs.remove(s)
-                #     s.close()
-                #     del message_queues[s]
+            else:
+                parse_hello(msg, server)
 
         # List of sockets to write to
         for s in writable:
-            if len(message_queues[s]) == 0:
-                # print('in writeable, MESSAGE_QUEUES: ', message_queues[s])
+            if len(message_queues[s]) > 0:
                 msg = message_queues[s].pop(0)
                 if msg[0] == 0:
                     for neighbor in NEIGHBORS:
                         send_update(neighbor, server)
                 else:
-                    format_dst_addr = ""
-                    for i in range(5,9):
-                        format_dst_addr = format_dst_addr + str(msg[i])
-                        if i < 3:
-                            format_dst_addr = format_dst_addr + "."
-                    send_hello(msg[9:], THIS_NODE, format_dst_addr, s)
+                    send_hello(msg, server)
 
         # Errors
         for s in exceptional:
@@ -251,18 +234,18 @@ def main(args: list):
             s.close()
             del message_queues[s]
 
-        # Send hello message if needed
-        endtime = time.time()
-        total_time = endtime - startime
-        if total_time > 30:
-            for neighbor in NEIGHBORS:
-                if out_sock in message_queues:
-                    message_queues[out_sock].append(format_hello())
-                else:
-                    message_queues[out_sock] = [format_hello(random.choice(MESSAGES), THIS_NODE, neighbor)]
-                write_to.append(out_sock)
+        # Send hello message every 15 seconds
+        end_time = time.time()
+        total_time = end_time - start_time
+        if total_time > 15:
+            if out_sock in message_queues:
+                message_queues[out_sock].append(format_hello(random.choice(MESSAGES), THIS_NODE, random.choice(list(NEIGHBORS))))
+            else:
+                message_queues[out_sock] = [format_hello(random.choice(MESSAGES), THIS_NODE, random.choice(list(NEIGHBORS)))]
+            write_to.append(out_sock)
 
-            startime = time.time()
+            start_time = time.time()
+
 
 if __name__ == "__main__":
     main(sys.argv)
