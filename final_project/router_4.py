@@ -34,12 +34,11 @@ def read_file(filename: str) -> None:
             line = infile.readline().strip()
 
         # Update ROUTING_TABLE
-        line = infile.readline()
-        while line != "\n":
-            neighbor = line.split()
-            ROUTING_TABLE[neighbor[0]] = [int(neighbor[1]), neighbor[0]]
-            NEIGHBORS.add(neighbor[0])
-            line = infile.readline()
+        line = infile.readline().strip().split()
+        while len(line) > 0:
+            ROUTING_TABLE[line[0]] = [int(line[1]), line[0]]
+            NEIGHBORS.add(line[0])
+            line = infile.readline().strip().split()
 
 def format_update():
     """Format update message"""
@@ -241,7 +240,7 @@ def main(args: list):
             if out_sock in message_queues:
                 message_queues[out_sock].append(format_hello(random.choice(MESSAGES), THIS_NODE, random.choice(list(NEIGHBORS))))
             else:
-                message_queues[out_sock] = [format_hello(random.choice(MESSAGES), THIS_NODE, random.choice(list(NEIGHBORS)))]
+                message_queues[out_sock].append(format_hello(random.choice(MESSAGES), THIS_NODE, random.choice(list(NEIGHBORS))))
             write_to.append(out_sock)
 
             start_time = time.time()
